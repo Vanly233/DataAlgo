@@ -10,7 +10,6 @@ import org.apache.hadoop.hive.ql.udf.generic.AbstractGenericUDAFResolver;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDAFEvaluator;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory;
-import org.apache.hadoop.hive.serde2.objectinspector.StandardMapObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.DoubleObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.LongObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory;
@@ -26,7 +25,7 @@ import java.util.TreeMap;
         value = "_FUNC_(time, value) - Interpolates the sequence of values",
         extended = "Example:\n" +
                 "  SELECT station_name, interpolate_seq(time, value) AS map_col FROM my_table GROUP BY station_name")
-public class InterpolateSeqUDAF extends AbstractGenericUDAFResolver {
+public class InterpolateSeq extends AbstractGenericUDAFResolver {
 
     @Override
     public GenericUDAFEvaluator getEvaluator(TypeInfo[] parameters) throws SemanticException {
@@ -163,5 +162,9 @@ public class InterpolateSeqUDAF extends AbstractGenericUDAFResolver {
                 return linearInterpolate(values);
             }
         }
+    }
+
+    public static void main(String[] args) {
+
     }
 }
