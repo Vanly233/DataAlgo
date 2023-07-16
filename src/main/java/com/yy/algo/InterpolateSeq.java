@@ -16,10 +16,7 @@ import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectIn
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 @Description(name = "interpolate_seq",
         value = "_FUNC_(time, value) - Interpolates the sequence of values",
@@ -85,9 +82,9 @@ public class InterpolateSeq extends AbstractGenericUDAFResolver {
         }
 
         @Override
-        public List<Double> terminatePartial(AggregationBuffer aggregationBuffer) throws HiveException {
+        public Map<Long, Double> terminatePartial(AggregationBuffer aggregationBuffer) throws HiveException {
             // Return the partial result
-            return ((InterpolateSeqAggregationBuffer) aggregationBuffer).getResult();
+            return ((InterpolateSeqAggregationBuffer) aggregationBuffer).getMapResult();
         }
 
         @Override
@@ -101,7 +98,53 @@ public class InterpolateSeq extends AbstractGenericUDAFResolver {
         @Override
         public Object terminate(AggregationBuffer aggregationBuffer) throws HiveException {
             // Return the final result
-            return linearInterpolate(((InterpolateSeqAggregationBuffer) aggregationBuffer).getResult());
+            return linearInterpolate(((InterpolateSeqAggregationBuffer) aggregationBuffer).getMapResult());
+        }
+
+        private static void createByKey(Map<Long, Double> map, Long[] keyIndex, Long key, Double value){
+            map.put(key, value);
+            keyIndex[map.size()-1] = key;
+        }
+
+
+        public static Map<Long, Double> linearInterpolate(Map<Long, Double> timeValueMap) {
+            Map<Long, Double> result = new LinkedHashMap<>();
+            if (timeValueMap == null || timeValueMap.isEmpty()) {
+                return result;
+            }
+            // 先按照 time 升序排序
+            int n = timeValueMap.size();
+            Map<Long, Double> map = new LinkedHashMap<>();
+            Long[] timeIndex = new Long[n];
+            timeValueMap.entrySet()
+                    .stream().sorted(Map.Entry.comparingByKey())
+                    .forEachOrdered(x -> createByKey(map, timeIndex, x.getKey(), x.getValue()));
+            int i = 0;
+            while (i < n) {
+                result.put(timeIndex[i], map.get(timeIndex[i]));
+                int j = i + 1;
+                while (j < n && map.get(timeIndex[j]) < map.get(timeIndex[i])) {
+                    j++;
+                }
+                if (j < n) {
+                    double steps = timeIndex[j] - timeIndex[i];
+                    double start = map.get(timeIndex[i]);
+                    double end = map.get(timeIndex[j]);
+                    double slope = (end - start) / steps;
+                    for (int k = i + 1; k < j; k++) {
+                        double delta = timeIndex[k] - timeIndex[i];
+                        double interpolatedValue = start + slope * delta;
+                        result.put(timeIndex[k], interpolatedValue);
+                    }
+                } else {
+                    for (int k = i + 1; k < n; k++) {
+                        result.put(timeIndex[k], map.get(timeIndex[k]));
+                    }
+                }
+                i = j;
+            }
+
+            return result;
         }
 
         public static List<Double> linearInterpolate(List<Double> v) {
@@ -157,10 +200,14 @@ public class InterpolateSeq extends AbstractGenericUDAFResolver {
                 sequenceMap.putAll(otherMap);
             }
 
-            public List<Double> getResult() {
-                List<Double> values = new ArrayList<>(sequenceMap.values());
-                return linearInterpolate(values);
+            public Map<Long,Double> getMapResult() {
+                return linearInterpolate(sequenceMap);
             }
+
+//            public List<Double> getResult() {
+//                List<Double> values = new ArrayList<>(sequenceMap.values());
+//                return linearInterpolate(values);
+//            }
         }
     }
 
